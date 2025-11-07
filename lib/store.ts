@@ -1,4 +1,6 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 
 export type UINote = {
   id: string;
@@ -27,38 +29,48 @@ const SEED: Omit<UINote, "id" | "updatedAt">[] = [
   { title: "Items for House", preview: "☐ Runner for kitchen\n☐ New lamp", color: "#B3E5FC" },
 ];
 
-export const useNoteStore = create<NoteState>((set, get) => ({
-  notes: [],
-  seedOnce: () => {
-    if (get().notes.length > 0) return;
-    const now = Date.now();
-    set({
-      notes: SEED.map((n, i) => ({
-        ...n,
-        id: `seed-${i + 1}`,
-        updatedAt: now - i * 1000,
-        pinned: i === 0 ? true : false,
-      })),
-    });
-  },
-  add: (n) => {
-    const id = Math.random().toString(36).slice(2);
-    set(s => ({ notes: [{ ...n, id, updatedAt: Date.now() }, ...s.notes] }));
-    return id;
-  },
-  update: (id, patch) => {
-    set(s => ({
-      notes: s.notes.map(n => (n.id === id ? { ...n, ...patch, updatedAt: Date.now() } : n)),
-    }));
-  },
-  remove: (id) => set(s => ({ notes: s.notes.filter(n => n.id !== id) })),
-  togglePin: (id) => {
-    const n = get().notes.find(x => x.id === id);
-    if (!n) return;
-    set(s => ({
-      notes: s.notes
-        .map(x => (x.id === id ? { ...x, pinned: !x.pinned, updatedAt: Date.now() } : x))
-        // keep pinned toward the top visually later if you want
-    }));
-  },
-}));
+const COLORS = ["#FFE082","#FFAB91","#80DEEA","#CF93D9","#A5D6A7","#FFF59D","#F8BBD0","#B39DDB","#90CAF9","#FFCC80","#B2EBF2","#B3E5FC"];
+const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
+
+export const useNoteStore = create<NoteState>()(
+  persist(
+    (set, get) => ({
+      notes: [],
+      seedOnce: () => {
+        if (get().notes.length > 0) return;
+        const now = Date.now();
+        set({
+          notes: SEED.map((n, i) => ({
+            ...n,
+            id: `seed-${i + 1}`,
+            updatedAt: now - i * 1000,
+            pinned: i === 0 ? true : false,
+          })),
+        });
+      },
+      add: (n) => {
+        const id = Math.random().toString(36).slice(2);
+        set(s => ({ notes: [{ ...n, id, updatedAt: Date.now() }, ...s.notes] }));
+        return id;
+      },
+      update: (id, patch) => {
+        set(s => ({
+          notes: s.notes.map(n => (n.id === id ? { ...n, ...patch, updatedAt: Date.now() } : n)),
+        }));
+      },
+      remove: (id) => set(s => ({ notes: s.notes.filter(n => n.id !== id) })),
+      togglePin: (id) => {
+        const n = get().notes.find(x => x.id === id);
+        if (!n) return;
+        set(s => ({
+          notes: s.notes.map(x => (x.id === id ? { ...x, pinned: !x.pinned, updatedAt: Date.now() } : x)),
+        }));
+      },
+    }),
+    {
+      name: "keep-clone",
+      storage: createJSONStorage(() => AsyncStorage),
+      // migrate or version later if you change schema
+    }
+  )
+);
