@@ -1,33 +1,51 @@
-import NoteCard, { UINote } from "@/app/_components/NoteCard";
-import { useMemo, useState } from "react";
+import NoteCard from "@/app/_components/NoteCard";
+import { useNoteStore } from "@/lib/store";
+import { useEffect, useMemo, useState } from "react";
 import { FlatList, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// temporary mock notes for UI
-const MOCK: UINote[] = [
-  { id: "1", title: "Material Design", preview: "Material design is a foundation upon which apps are built.", color: "#90CAF9" },
-  { id: "2", title: "1175 Borregas Ave Sunnyvale, CA 94089", preview: "", color: "#F48FB1" },
-  { id: "3", title: "Shopping list", preview: "• Eggs\n• Bread\n• Tomatoes\n• Onions", color: "#FFF176" },
-  { id: "4", title: "Drawing by Rocky", preview: "🐧 penguin sketch", color: "#B2EBF2" },
-  { id: "5", title: "Surprise party for Rocky!", preview: "", color: "#FFCC80" },
-  { id: "6", title: "Items for House", preview: "☐ Runner for kitchen\n☐ New lamp", color: "#B3E5FC" },
-];
-
 export default function Home() {
+  const { notes, seedOnce } = useNoteStore();
   const [q, setQ] = useState("");
+
+  useEffect(() => {
+    seedOnce();
+  }, [seedOnce]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return MOCK;
-    return MOCK.filter(n =>
-      n.title.toLowerCase().includes(s) ||
-      (n.preview || "").toLowerCase().includes(s)
-    );
-  }, [q]);
+    const data = s
+      ? notes.filter(n =>
+          n.title.toLowerCase().includes(s) ||
+          (n.preview || "").toLowerCase().includes(s)
+        )
+      : notes;
+
+    return {
+      pinned: data.filter(n => n.pinned),
+      others: data.filter(n => !n.pinned),
+    };
+  }, [notes, q]);
+
+  const renderSection = (label: string, items: typeof notes) => (
+    <View style={{ gap: 10 }}>
+      {items.length > 0 && (
+        <Text style={{ fontWeight: "700", opacity: 0.6 }}>{label}</Text>
+      )}
+      <FlatList
+        data={items}
+        keyExtractor={(i) => i.id}
+        numColumns={2}
+        columnWrapperStyle={{ gap: 12 }}
+        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+        renderItem={({ item }) => <NoteCard note={item} />}
+      />
+    </View>
+  );
 
   return (
     <SafeAreaView style={{ flex: 1, padding: 16 }}>
-      {/* search bar */}
+      {/* search */}
       <View style={{
         backgroundColor: "#F2F2F4",
         borderRadius: 12,
@@ -43,18 +61,15 @@ export default function Home() {
         />
       </View>
 
-      {/* header (optional) */}
-      <Text style={{ fontWeight: "700", opacity: 0.6, marginBottom: 8 }}>NOTES</Text>
-
-      {/* 2-column grid */}
       <FlatList
-        data={filtered}
-        keyExtractor={(i) => i.id}
-        numColumns={2}
-        columnWrapperStyle={{ gap: 12 }}
-        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-        renderItem={({ item }) => <NoteCard note={item} />}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        data={[{ key: "pinned" }, { key: "others" }]}
+        keyExtractor={(i) => i.key}
+        renderItem={({ item }) =>
+          item.key === "pinned"
+            ? renderSection("PINNED", filtered.pinned)
+            : renderSection("NOTES", filtered.others)
+        }
+        ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
       />
     </SafeAreaView>
   );
