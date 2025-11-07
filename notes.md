@@ -270,4 +270,209 @@ export default function Home() {
 
  - update the note card with the ability to pin or unpin
 
+ ### PERSISTENCE + FAB Quick ADD ###
+ 
+ - We’ll (1) add AsyncStorage-powered persistence to the Zustand store and (2) add a floating “+” button that creates a new empty note (you’ll wire the editor in Step 4).
+
+ - install dependenies
+
+ ```
+npx expo install @react-native-async-storage/async-storage
+
+ ```
+ - update the store
+
+ ```
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+export type UINote = {
+  id: string;
+  title: string;
+  preview?: string;
+  color: string;   // hex
+  pinned?: boolean;
+  updatedAt: number;
+};
+
+type NoteState = {
+  notes: UINote[];
+  seedOnce: () => void;
+  add: (n: Omit<UINote, "id" | "updatedAt">) => string;
+  update: (id: string, patch: Partial<UINote>) => void;
+  remove: (id: string) => void;
+  togglePin: (id: string) => void;
+};
+
+const SEED: Omit<UINote, "id" | "updatedAt">[] = [
+  { title: "Material Design", preview: "Material design is a foundation upon which apps are built.", color: "#90CAF9" },
+  { title: "1175 Borregas Ave Sunnyvale, CA 94089", preview: "", color: "#F48FB1" },
+  { title: "Shopping list", preview: "• Eggs\n• Bread\n• Tomatoes\n• Onions", color: "#FFF176" },
+  { title: "Drawing by Rocky", preview: "🐧 penguin sketch", color: "#B2EBF2" },
+  { title: "Surprise party for Rocky!", preview: "", color: "#FFCC80" },
+  { title: "Items for House", preview: "☐ Runner for kitchen\n☐ New lamp", color: "#B3E5FC" },
+];
+
+const COLORS = ["#FFE082","#FFAB91","#80DEEA","#CF93D9","#A5D6A7","#FFF59D","#F8BBD0","#B39DDB","#90CAF9","#FFCC80","#B2EBF2","#B3E5FC"];
+const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
+
+export const useNoteStore = create<NoteState>()(
+  persist(
+    (set, get) => ({
+      notes: [],
+      seedOnce: () => {
+        if (get().notes.length > 0) return;
+        const now = Date.now();
+        set({
+          notes: SEED.map((n, i) => ({
+            ...n,
+            id: `seed-${i + 1}`,
+            updatedAt: now - i * 1000,
+            pinned: i === 0 ? true : false,
+          })),
+        });
+      },
+      add: (n) => {
+        const id = Math.random().toString(36).slice(2);
+        set(s => ({ notes: [{ ...n, id, updatedAt: Date.now() }, ...s.notes] }));
+        return id;
+      },
+      update: (id, patch) => {
+        set(s => ({
+          notes: s.notes.map(n => (n.id === id ? { ...n, ...patch, updatedAt: Date.now() } : n)),
+        }));
+      },
+      remove: (id) => set(s => ({ notes: s.notes.filter(n => n.id !== id) })),
+      togglePin: (id) => {
+        const n = get().notes.find(x => x.id === id);
+        if (!n) return;
+        set(s => ({
+          notes: s.notes.map(x => (x.id === id ? { ...x, pinned: !x.pinned, updatedAt: Date.now() } : x)),
+        }));
+      },
+    }),
+    {
+      name: "keep-clone",
+      storage: createJSONStorage(() => AsyncStorage),
+      // migrate or version later if you change schema
+    }
+  )
+);
+
+ ```
+
+ - add the fab component
+ - import it in the index.tsx
+ - add the function with the alert and pass to FAB
+
+ ```
+
+import { Pressable, Text } from "react-native";
+
+export default function FAB({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        position: "absolute",
+        right: 20,
+        bottom: 30,
+        backgroundColor: "#1976D2",
+        borderRadius: 28,
+        paddingHorizontal: 18,
+        paddingVertical: 14,
+        shadowColor: "#000",
+        shadowOpacity: 0.2,
+        shadowRadius: 10,
+        elevation: 6,
+      }}
+    >
+      <Text style={{ color: "white", fontWeight: "800", fontSize: 18 }}>＋</Text>
+    </Pressable>
+  );
+}
+
+ ```
+
+ - update homepage
+
+ ```
+ import NoteCard from "@/app/_components/NoteCard";
+import { useNoteStore } from "@/lib/store";
+import { useEffect, useMemo, useState } from "react";
+import { Alert, FlatList, Text, TextInput, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import FAB from "./_components/Fab";
+
+const COLORS = ["#FFE082","#FFAB91","#80DEEA","#CF93D9","#A5D6A7","#FFF59D","#F8BBD0","#B39DDB","#90CAF9","#FFCC80","#B2EBF2","#B3E5FC"];
+const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
+
+export default function Home() {
+  const { notes, seedOnce, add } = useNoteStore();
+  const [q, setQ] = useState("");
+
+  useEffect(() => { seedOnce(); }, [seedOnce]);
+
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    const data = s
+      ? notes.filter(n =>
+          n.title.toLowerCase().includes(s) ||
+          (n.preview || "").toLowerCase().includes(s)
+        )
+      : notes;
+    return { pinned: data.filter(n => n.pinned), others: data.filter(n => !n.pinned) };
+  }, [notes, q]);
+
+  function handleQuickAdd() {
+    const id = add({
+      title: "Untitled",
+      preview: "",
+      color: pick(COLORS),
+      pinned: false,
+    });
+    Alert.alert("Note created", "Tap to edit in the next step.");
+    // stays on Home for now; we’ll push to an editor screen in Step 4
+  }
+
+  const renderSection = (label: string, items: typeof notes) => (
+    <View style={{ gap: 10 }}>
+      {items.length > 0 && <Text style={{ fontWeight: "700", opacity: 0.6 }}>{label}</Text>}
+      <FlatList
+        data={items}
+        keyExtractor={(i) => i.id}
+        numColumns={2}
+        columnWrapperStyle={{ gap: 12 }}
+        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+        renderItem={({ item }) => <NoteCard note={item} />}
+      />
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={{ flex: 1, padding: 16 }}>
+      <View style={{ backgroundColor: "#F2F2F4", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 }}>
+        <TextInput placeholder="Search your notes" value={q} onChangeText={setQ} style={{ fontSize: 16 }} />
+      </View>
+
+      <FlatList
+        data={[{ key: "pinned" }, { key: "others" }]}
+        keyExtractor={(i) => i.key}
+        renderItem={({ item }) =>
+          item.key === "pinned"
+            ? renderSection("PINNED", filtered.pinned)
+            : renderSection("NOTES", filtered.others)
+        }
+        ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
+      />
+
+      <FAB  onPress={handleQuickAdd} />
+    </SafeAreaView>
+  );
+}
+
+
+ ```
+
  
