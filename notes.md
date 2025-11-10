@@ -475,4 +475,101 @@ export default function Home() {
 
  ```
 
+ ### RICH TEXT EDITOR & EDIT SCREEN ###
+ - pull up from the docs
+ - install dependencies
+
+ ```
+npm i react-native-pell-rich-editor
+npx expo install react-native-webview
+
+
+ ```
+
+ - add ColorRow.tsx components
+ - this will be the row for the text editor
+
+ ```
+import { useNoteStore } from "@/lib/store";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useMemo, useState } from "react";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { RichEditor, RichToolbar, actions } from "react-native-pell-rich-editor";
+import ColorRow from "./_components/ColorRow";
+
+export default function Edit() {
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const router = useRouter();
+  const { notes, add, update, remove } = useNoteStore();
+
+  const existing = useMemo(() => notes.find(n => n.id === id), [id, notes]);
+
+  // local form state
+  const [title, setTitle]   = useState(existing?.title ?? "");
+  const [html, setHtml]     = useState(existing?.preview ?? ""); // we’ll store rich text in preview for now
+  const [color, setColor]   = useState(existing?.color ?? "#FFE082");
+  const [pinned, setPinned] = useState(existing?.pinned ?? false);
+
+  function save() {
+    if (existing) {
+      update(existing.id, { title, preview: html, color, pinned });
+    } else {
+      const newId = add({ title, preview: html, color, pinned });
+      // optional: navigate to the created id view; here we just go back
+    }
+    router.replace("/");
+  }
+
+  return (
+    <View style={{ flex: 1, backgroundColor: color }}>
+      {/* top bar */}
+      <View style={{ flexDirection: "row", justifyContent: "space-between", padding: 16 }}>
+        <Pressable onPress={() => router.back()}><Text>←</Text></Pressable>
+        <View style={{ flexDirection: "row", gap: 16 }}>
+          <Pressable onPress={() => setPinned(p => !p)}><Text>{pinned ? "📌" : "📍"}</Text></Pressable>
+          {existing && (
+            <Pressable onPress={() => { remove(existing.id); router.replace("/"); }}>
+              <Text>🗑️</Text>
+            </Pressable>
+          )}
+          <Pressable onPress={save}><Text>✅</Text></Pressable>
+        </View>
+      </View>
+
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 80 }}>
+        <TextInput
+          placeholder="Title"
+          value={title}
+          onChangeText={setTitle}
+          style={{ fontSize: 22, fontWeight: "700", marginBottom: 8 }}
+        />
+
+        {/* Rich editor */}
+        <View style={{ backgroundColor: "white", borderRadius: 10, overflow: "hidden" }}>
+          <RichToolbar
+            actions={[actions.setBold, actions.setItalic, actions.insertLink, actions.heading1, actions.insertBulletsList, actions.insertOrderedList]}
+            editor={() => editor as any}
+          />
+          <RichEditor
+            ref={(r) => (editor = r!)}
+            initialContentHTML={html}
+            onChange={setHtml}
+            placeholder="Start writing…"
+            androidHardwareAccelerationDisabled
+            editorStyle={{ backgroundColor: "white", cssText: "padding:12px;font-size:16px;" }}
+            style={{ minHeight: 240 }}
+          />
+        </View>
+
+        <View style={{ height: 16 }} />
+        <ColorRow value={color} onChange={setColor} />
+      </ScrollView>
+    </View>
+  );
+}
+let editor: RichEditor;
+
+ ```
+
+ - edit.tsx screen
  
