@@ -1,7 +1,8 @@
  import NoteCard from "@/app/_components/NoteCard";
 import { useNoteStore } from "@/lib/store";
+import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, FlatList, Text, TextInput, View } from "react-native";
+import { FlatList, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import FAB from "./_components/Fab";
 
@@ -11,7 +12,7 @@ const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
 export default function Home() {
   const { notes, seedOnce, add } = useNoteStore();
   const [q, setQ] = useState("");
-
+const router= useRouter()
   useEffect(() => { seedOnce(); }, [seedOnce]);
 
   const filtered = useMemo(() => {
@@ -32,8 +33,7 @@ export default function Home() {
       color: pick(COLORS),
       pinned: false,
     });
-    Alert.alert("Note created", "Tap to edit in the next step.");
-    // stays on Home for now; we’ll push to an editor screen in Step 4
+    router.push({pathname: "/edit", params: {id}})    // stays on Home for now; we’ll push to an editor screen in Step 4
   }
 
   const renderSection = (label: string, items: typeof notes) => (
